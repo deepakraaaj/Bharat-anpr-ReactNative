@@ -78,6 +78,17 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace "com.bharatanprmobile"
+    // Release builds ship one APK per phone CPU type instead of one APK carrying all four.
+    // Debug builds stay universal so emulators (x86/x86_64) keep working.
+    splits {
+        abi {
+            enable gradle.startParameter.taskNames.any { it.contains("Release") }
+            reset()
+            include "arm64-v8a", "armeabi-v7a"
+            universalApk false
+        }
+    }
+
     defaultConfig {
         applicationId "com.bharatanprmobile"
         minSdkVersion rootProject.ext.minSdkVersion
