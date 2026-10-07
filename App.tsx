@@ -2,13 +2,19 @@ import React, {useEffect, useState} from 'react';
 import {Modal, Pressable, ScrollView, StatusBar, StyleSheet, Text, View} from 'react-native';
 import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
 import {useCameraPermission} from 'react-native-vision-camera';
+import {History, Info as InfoIcon, LucideIcon, ScanLine, SlidersHorizontal} from 'lucide-react-native';
 import Plate from './src/Plate';
 import PlateScanner, {GUIDE} from './src/PlateScanner';
 import {colors, type} from './src/theme';
 
 type Screen = 'Scan' | 'History' | 'Settings' | 'About';
 type HistoryRow = {plate: string; timestamp: number};
-const tabs: Screen[] = ['Scan', 'History', 'Settings', 'About'];
+const tabs: {name: Screen; icon: LucideIcon}[] = [
+  {name: 'Scan', icon: ScanLine},
+  {name: 'History', icon: History},
+  {name: 'Settings', icon: SlidersHorizontal},
+  {name: 'About', icon: InfoIcon},
+];
 
 export default function App() {
   return (
@@ -98,12 +104,16 @@ function Main() {
       <StatusBar barStyle="light-content" />
       <View style={styles.content}>{body}</View>
       <SafeAreaView edges={['bottom']} style={styles.tabs}>
-        {tabs.map(tab => (
-          <Pressable key={tab} style={styles.tab} onPress={() => setScreen(tab)} accessibilityRole="tab" accessibilityState={{selected: screen === tab}}>
-            <View style={[styles.tabMark, screen === tab && styles.tabMarkActive]} />
-            <Text style={[styles.tabText, screen === tab && styles.tabTextActive]}>{tab}</Text>
-          </Pressable>
-        ))}
+        {tabs.map(({name, icon: Icon}) => {
+          const active = screen === name;
+          return (
+            <Pressable key={name} style={styles.tab} onPress={() => setScreen(name)} accessibilityRole="tab" accessibilityState={{selected: active}}>
+              <View style={[styles.tabMark, active && styles.tabMarkActive]} />
+              <Icon size={22} strokeWidth={active ? 2.4 : 1.8} color={active ? colors.marking : colors.muted} />
+              <Text style={[styles.tabText, active && styles.tabTextActive]}>{name}</Text>
+            </Pressable>
+          );
+        })}
       </SafeAreaView>
       <Modal transparent visible={candidates.length > 0} animationType="slide" onRequestClose={cancel}>
         <View style={styles.backdrop}>
@@ -176,10 +186,10 @@ const styles = StyleSheet.create({
   examples: {gap: 10, alignSelf: 'flex-start', width: 230},
 
   tabs: {flexDirection: 'row', backgroundColor: colors.asphalt, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.asphaltLine},
-  tab: {flex: 1, alignItems: 'center', paddingBottom: 12, minHeight: 56},
-  tabMark: {width: 28, height: 3, borderRadius: 2, marginBottom: 10, backgroundColor: 'transparent'},
+  tab: {flex: 1, alignItems: 'center', paddingBottom: 10, minHeight: 64},
+  tabMark: {width: 28, height: 3, borderRadius: 2, marginBottom: 8, backgroundColor: 'transparent'},
   tabMarkActive: {backgroundColor: colors.marking},
-  tabText: {fontSize: 13, fontWeight: '600', color: colors.muted},
+  tabText: {fontSize: 12, fontWeight: '600', color: colors.muted, marginTop: 4},
   tabTextActive: {color: colors.text},
 
   backdrop: {flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,.55)'},
