@@ -1,13 +1,24 @@
 import React, {useEffect, useState} from 'react';
-import {Modal, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View} from 'react-native';
+import {Modal, Pressable, ScrollView, StatusBar, StyleSheet, Text, View} from 'react-native';
+import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
 import {useCameraPermission} from 'react-native-vision-camera';
-import PlateScanner from './src/PlateScanner';
+import Plate from './src/Plate';
+import PlateScanner, {GUIDE} from './src/PlateScanner';
+import {colors, type} from './src/theme';
 
 type Screen = 'Scan' | 'History' | 'Settings' | 'About';
 type HistoryRow = {plate: string; timestamp: number};
 const tabs: Screen[] = ['Scan', 'History', 'Settings', 'About'];
 
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <Main />
+    </SafeAreaProvider>
+  );
+}
+
+function Main() {
   const [screen, setScreen] = useState<Screen>('Scan');
   const {hasPermission: permission, requestPermission: requestCamera} = useCameraPermission();
   const [status, setStatus] = useState('Starting camera…');
@@ -20,26 +31,165 @@ export default function App() {
   const confirm = () => {
     if (!selected) return;
     setHistory(rows => [{plate: selected, timestamp: Date.now()}, ...rows]);
-    setCandidates([]); setSelected(undefined); setStatus('Saved · scanning resumed');
+    setCandidates([]); setSelected(undefined); setStatus('Plate saved. Scanning for the next one.');
   };
   const cancel = () => {setCandidates([]); setSelected(undefined);};
 
   let body: React.ReactNode;
   if (screen === 'History') {
-    body = <View style={styles.page}><Text style={styles.heading}>Detection history</Text>{history.length === 0 ? <Text style={styles.muted}>No confirmed plates yet.</Text> : history.map(row => <View key={`${row.plate}-${row.timestamp}`} style={styles.card}><Text style={styles.plate}>{row.plate}</Text><Text style={styles.muted}>{new Date(row.timestamp).toLocaleString()}</Text></View>)}</View>;
+    body = (
+      <ScrollView contentContainerStyle={styles.page}>
+        <Text style={type.title}>History</Text>
+        {history.length === 0 ? (
+          <Text style={type.small}>Confirmed plates appear here. Scan a plate and tap Save to add one.</Text>
+        ) : history.map(row => (
+          <View key={`${row.plate}-${row.timestamp}`} style={styles.historyRow}>
+            <View style={styles.historyPlate}><Plate value={row.plate} size="small" /></View>
+            <Text style={styles.time}>{new Date(row.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</Text>
+          </View>
+        ))}
+      </ScrollView>
+    );
   } else if (screen === 'Settings') {
-    body = <View style={styles.page}><Text style={styles.heading}>Settings</Text><Info label="Camera" value="VisionCamera · 4 scans/sec"/><Info label="Detection" value="Guide box (YOLO model not bundled)"/><Info label="OCR" value="ML Kit · offline"/><Info label="Confirmation" value="Required before saving"/></View>;
+    body = (
+      <ScrollView contentContainerStyle={styles.page}>
+        <Text style={type.title}>Settings</Text>
+        <Info label="Scan rate" value="Up to 4 frames a second" />
+        <Info label="Detection" value="Reads text inside the on-screen frame. Automatic plate detection needs a YOLO model, which isn't installed." />
+        <Info label="Text recognition" value="Google ML Kit, on this phone. No internet needed." />
+        <Info label="Saving" value="Every plate is confirmed by you before it's saved." />
+      </ScrollView>
+    );
   } else if (screen === 'About') {
-    body = <View style={styles.page}><Text style={styles.heading}>Bharat ANPR Mobile</Text><Text style={styles.copy}>Offline-first Indian number-plate recognition. Camera frames and OCR stay on this device.</Text><Text style={styles.subheading}>How it works</Text><Text style={styles.copy}>Built entirely in React Native with VisionCamera and ML Kit text recognition. No custom native code.</Text></View>;
+    body = (
+      <ScrollView contentContainerStyle={styles.page}>
+        <Text style={type.title}>Bharat ANPR</Text>
+        <Text style={type.body}>Reads Indian number plates with the phone camera. Photos and results stay on this device.</Text>
+        <Text style={[type.heading, styles.section]}>Reading a plate</Text>
+        <Text style={type.body}>Hold the whole plate inside the yellow frame and keep the phone steady. When the same number reads twice in a row, you're asked to confirm it.</Text>
+        <Text style={[type.heading, styles.section]}>Supported formats</Text>
+        <View style={styles.examples}>
+          <Plate value="KA05KC5877" size="small" />
+          <Plate value="22BH1234AA" size="small" />
+        </View>
+      </ScrollView>
+    );
   } else {
-    body = <View style={styles.scanner}>{permission ? <PlateScanner active={candidates.length === 0} onCandidates={values => {setCandidates(values); setSelected(values[0]);}} onStatus={setStatus}/> : <View style={styles.center}><Text style={styles.copy}>Camera permission is required.</Text><Pressable style={styles.button} onPress={requestCamera}><Text style={styles.buttonText}>Grant camera access</Text></Pressable></View>}<View pointerEvents="none" style={styles.guide}/><View style={styles.statusCard}><Text style={styles.status}>{status}</Text><Text style={styles.hint}>Align the full plate inside the box</Text></View></View>;
+    body = (
+      <View style={styles.scanner}>
+        {permission ? (
+          <PlateScanner active={candidates.length === 0} onCandidates={values => {setCandidates(values); setSelected(values[0]);}} onStatus={setStatus} />
+        ) : (
+          <View style={styles.center}>
+            <Text style={type.heading}>Camera access is off</Text>
+            <Text style={[type.small, styles.centerText]}>Bharat ANPR needs the camera to read plates.</Text>
+            <Pressable style={styles.button} onPress={requestCamera}><Text style={styles.buttonText}>Allow camera</Text></Pressable>
+          </View>
+        )}
+        {permission && <Viewfinder />}
+        {permission && <View style={styles.statusBar}><Text style={styles.status}>{status}</Text></View>}
+      </View>
+    );
   }
 
-  return <SafeAreaView style={styles.root}><StatusBar barStyle="light-content"/><View style={styles.content}>{body}</View><View style={styles.tabs}>{tabs.map(tab => <Pressable key={tab} style={styles.tab} onPress={() => setScreen(tab)}><Text style={[styles.tabText, screen === tab && styles.tabSelected]}>{tab}</Text></Pressable>)}</View><Modal transparent visible={candidates.length > 0} animationType="fade" onRequestClose={cancel}><View style={styles.modalBackdrop}><View style={styles.dialog}><Text style={styles.heading}>{candidates.length > 1 ? 'Select a number plate' : 'Confirm number plate'}</Text><Text style={styles.muted}>{candidates.length > 1 ? 'Multiple plates were found. Choose one to process.' : 'Is this the correct plate?'}</Text>{candidates.map(value => <Pressable key={value} style={[styles.candidate, selected === value && styles.candidateSelected]} onPress={() => setSelected(value)}><Text style={styles.radio}>{selected === value ? '●' : '○'}</Text><Text style={styles.plate}>{value}</Text></Pressable>)}<View style={styles.actions}><Pressable onPress={cancel}><Text style={styles.cancel}>Cancel</Text></Pressable><Pressable style={styles.button} onPress={confirm}><Text style={styles.buttonText}>Confirm</Text></Pressable></View></View></View></Modal></SafeAreaView>;
+  const choosing = candidates.length > 1;
+  return (
+    <SafeAreaView style={styles.root} edges={['top']}>
+      <StatusBar barStyle="light-content" />
+      <View style={styles.content}>{body}</View>
+      <SafeAreaView edges={['bottom']} style={styles.tabs}>
+        {tabs.map(tab => (
+          <Pressable key={tab} style={styles.tab} onPress={() => setScreen(tab)} accessibilityRole="tab" accessibilityState={{selected: screen === tab}}>
+            <View style={[styles.tabMark, screen === tab && styles.tabMarkActive]} />
+            <Text style={[styles.tabText, screen === tab && styles.tabTextActive]}>{tab}</Text>
+          </Pressable>
+        ))}
+      </SafeAreaView>
+      <Modal transparent visible={candidates.length > 0} animationType="slide" onRequestClose={cancel}>
+        <View style={styles.backdrop}>
+          <View style={styles.sheet}>
+            <Text style={type.heading}>{choosing ? 'Which plate is it?' : 'Is this the plate?'}</Text>
+            <Text style={type.small}>{choosing ? 'Some characters could be read more than one way. Pick the one that matches.' : 'Check it against the vehicle before saving.'}</Text>
+            {candidates.map(value => (
+              <Pressable key={value} onPress={() => setSelected(value)} accessibilityRole="radio" accessibilityState={{checked: selected === value}} style={[styles.option, choosing && selected === value && styles.optionSelected]}>
+                <Plate value={value} />
+              </Pressable>
+            ))}
+            <View style={styles.actions}>
+              <Pressable style={styles.secondary} onPress={cancel}><Text style={styles.secondaryText}>Scan again</Text></Pressable>
+              <Pressable style={[styles.button, styles.grow]} onPress={confirm}><Text style={styles.buttonText}>Save</Text></Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
 }
 
-function Info({label, value}: {label: string; value: string}) { return <View style={styles.card}><Text style={styles.infoLabel}>{label}</Text><Text style={styles.muted}>{value}</Text></View>; }
+/** Corner brackets marking the region PlateScanner reads; positioned from the same GUIDE fractions. */
+function Viewfinder() {
+  const frame = {left: `${GUIDE.left * 100}%`, top: `${GUIDE.top * 100}%`, width: `${GUIDE.width * 100}%`, height: `${GUIDE.height * 100}%`} as const;
+  return (
+    <View pointerEvents="none" style={[styles.frame, frame]}>
+      <View style={[styles.corner, styles.topLeft]} />
+      <View style={[styles.corner, styles.topRight]} />
+      <View style={[styles.corner, styles.bottomLeft]} />
+      <View style={[styles.corner, styles.bottomRight]} />
+    </View>
+  );
+}
+
+function Info({label, value}: {label: string; value: string}) {
+  return (
+    <View style={styles.info}>
+      <Text style={type.heading}>{label}</Text>
+      <Text style={type.small}>{value}</Text>
+    </View>
+  );
+}
+
+const CORNER = 34;
+const STROKE = 5;
 
 const styles = StyleSheet.create({
-  root:{flex:1,backgroundColor:'#080B10'},content:{flex:1},scanner:{flex:1,backgroundColor:'#05070A'},page:{flex:1,padding:24,gap:16},center:{flex:1,alignItems:'center',justifyContent:'center',gap:16},heading:{fontSize:25,fontWeight:'800',color:'#F8FAFC'},subheading:{fontSize:18,fontWeight:'700',color:'#FFB300',marginTop:18},copy:{fontSize:16,lineHeight:24,color:'#D5DBE5'},muted:{fontSize:14,color:'#929CAB'},guide:{position:'absolute',left:'8%',right:'8%',top:'34%',height:'25%',borderColor:'#FFB300',borderWidth:3,borderRadius:16},statusCard:{position:'absolute',left:20,right:20,bottom:24,backgroundColor:'rgba(8,11,16,.88)',padding:18,borderRadius:18,borderWidth:1,borderColor:'#252B35'},status:{color:'#FFF',fontWeight:'700',fontSize:17,textAlign:'center'},hint:{color:'#AAB2BF',textAlign:'center',marginTop:6},tabs:{height:68,flexDirection:'row',borderTopWidth:1,borderTopColor:'#252B35',backgroundColor:'#10141B'},tab:{flex:1,alignItems:'center',justifyContent:'center'},tabText:{color:'#818A98',fontWeight:'600'},tabSelected:{color:'#FFB300'},card:{padding:16,borderRadius:14,backgroundColor:'#121720',gap:4},plate:{fontSize:20,fontWeight:'800',color:'#F8FAFC',letterSpacing:1},infoLabel:{color:'#FFF',fontWeight:'700',marginBottom:4},button:{backgroundColor:'#FFB300',paddingHorizontal:20,paddingVertical:12,borderRadius:12},buttonText:{color:'#171006',fontWeight:'800'},modalBackdrop:{flex:1,backgroundColor:'rgba(0,0,0,.72)',alignItems:'center',justifyContent:'center',padding:24},dialog:{width:'100%',maxWidth:440,backgroundColor:'#151A22',borderRadius:22,padding:22,gap:14},candidate:{flexDirection:'row',alignItems:'center',gap:12,padding:14,borderWidth:1,borderColor:'#343B47',borderRadius:14},candidateSelected:{borderColor:'#FFB300',backgroundColor:'#2A2415'},radio:{fontSize:20,color:'#FFB300'},actions:{flexDirection:'row',justifyContent:'flex-end',alignItems:'center',gap:22,marginTop:8},cancel:{color:'#D1D6DF',fontWeight:'700'}
+  root: {flex: 1, backgroundColor: colors.asphalt},
+  content: {flex: 1},
+  page: {padding: 20, gap: 16},
+  section: {marginTop: 12},
+  center: {flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 32},
+  centerText: {textAlign: 'center', marginBottom: 8},
+
+  scanner: {flex: 1, backgroundColor: '#000'},
+  frame: {position: 'absolute'},
+  corner: {position: 'absolute', width: CORNER, height: CORNER, borderColor: colors.marking},
+  topLeft: {top: 0, left: 0, borderTopWidth: STROKE, borderLeftWidth: STROKE, borderTopLeftRadius: 10},
+  topRight: {top: 0, right: 0, borderTopWidth: STROKE, borderRightWidth: STROKE, borderTopRightRadius: 10},
+  bottomLeft: {bottom: 0, left: 0, borderBottomWidth: STROKE, borderLeftWidth: STROKE, borderBottomLeftRadius: 10},
+  bottomRight: {bottom: 0, right: 0, borderBottomWidth: STROKE, borderRightWidth: STROKE, borderBottomRightRadius: 10},
+  statusBar: {position: 'absolute', left: 16, right: 16, bottom: 20, paddingVertical: 14, paddingHorizontal: 18, borderRadius: 12, backgroundColor: 'rgba(30,35,40,.92)'},
+  status: {...type.body, fontWeight: '600', textAlign: 'center'},
+
+  historyRow: {flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.asphaltLine},
+  historyPlate: {flex: 1},
+  time: {...type.small, fontVariant: ['tabular-nums']},
+  info: {gap: 4, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.asphaltLine},
+  examples: {gap: 10, alignSelf: 'flex-start', width: 230},
+
+  tabs: {flexDirection: 'row', backgroundColor: colors.asphalt, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.asphaltLine},
+  tab: {flex: 1, alignItems: 'center', paddingBottom: 12, minHeight: 56},
+  tabMark: {width: 28, height: 3, borderRadius: 2, marginBottom: 10, backgroundColor: 'transparent'},
+  tabMarkActive: {backgroundColor: colors.marking},
+  tabText: {fontSize: 13, fontWeight: '600', color: colors.muted},
+  tabTextActive: {color: colors.text},
+
+  backdrop: {flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,.55)'},
+  sheet: {backgroundColor: colors.asphaltRaised, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 32, gap: 14},
+  option: {padding: 4, borderRadius: 11, borderWidth: 2, borderColor: 'transparent'},
+  optionSelected: {borderColor: colors.marking},
+  actions: {flexDirection: 'row', gap: 12, marginTop: 6},
+  grow: {flex: 1},
+  button: {minHeight: 50, paddingHorizontal: 22, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.marking},
+  buttonText: {fontSize: 16, fontWeight: '800', color: colors.markingInk},
+  secondary: {minHeight: 50, paddingHorizontal: 18, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.asphaltLine},
+  secondaryText: {fontSize: 16, fontWeight: '600', color: colors.text},
 });

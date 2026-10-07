@@ -51,7 +51,7 @@ export default function PlateScanner({active, onCandidates, onStatus}: Props) {
     // Only report plates read identically in consecutive scans; one-off OCR noise rarely repeats.
     let previous = new Set<string>();
     (async () => {
-      callbacks.current.onStatus('Scanning guide box · ML Kit OCR');
+      callbacks.current.onStatus('Hold the plate inside the frame');
       while (!cancelled) {
         const startedAt = Date.now();
         try {

@@ -45,3 +45,10 @@ export function plateCandidates(raw: string): string[] {
   }
   return [...new Set(values.flatMap(value => [value, ...corrections(value)]))].filter(isValidPlate);
 }
+
+/** Spaces a validated plate the way it is printed: "KA 05 KC 5877", "22 BH 1234 AA". */
+export function formatPlate(value: string): string {
+  const bh = /^([0-9]{2})(BH)([0-9]{4})([A-Z]{2})$/.exec(value);
+  const match = bh ?? standard.exec(value);
+  return match ? match.slice(1).join(' ') : value;
+}
