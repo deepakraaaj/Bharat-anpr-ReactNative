@@ -16,6 +16,7 @@ FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf'
 RES = Path('android/app/src/main/res')
 DENSITIES = {'mdpi': 1, 'hdpi': 1.5, 'xhdpi': 2, 'xxhdpi': 3, 'xxxhdpi': 4}
 S = 1080  # master canvas for one 108dp adaptive layer; 10 px per dp
+ART_SCALE = 0.78
 
 
 def foreground() -> Image.Image:
@@ -42,7 +43,14 @@ def foreground() -> Image.Image:
     tw = d.textlength(text, font=font)
     text_cx = (strip[2] + box[2]) / 2
     d.text((text_cx - tw / 2, c), text, font=font, fill=INK, anchor='lm')
-    return img
+
+    # Some launchers (e.g. ColorOS) crop well inside the 66dp safe zone, so shrink the artwork
+    # until the viewfinder corners survive their mask.
+    art = img.resize((round(S * ART_SCALE),) * 2, Image.LANCZOS)
+    out = Image.new('RGBA', (S, S), (0, 0, 0, 0))
+    offset = (S - art.width) // 2
+    out.alpha_composite(art, (offset, offset))
+    return out
 
 
 def legacy(fg: Image.Image, round_icon: bool) -> Image.Image:
